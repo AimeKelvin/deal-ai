@@ -4,13 +4,17 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import torch
 import os
 import json
-import asyncio
-import edge_tts
-from gtts import gTTS
 
-# Voice feature config
-ENABLE_VOICE = True  # Set to False to disable voice
-USE_ONLINE_VOICE = False  # Set to True for online (gTTS), False for offline (Edge TTS)
+# Voice feature config (set to True to enable voice, False to disable)
+ENABLE_VOICE = True  # Change to True if you want the analyzer to speak
+if ENABLE_VOICE:
+    try:
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.setProperty('voice', 'english_rp+m3')  # Set to a male voice
+    except ImportError:
+        print("I’d speak if I could, but pyttsx3 isn’t installed. Try 'pip install pyttsx3'.")
+        ENABLE_VOICE = False
 
 # Load GPT-2 model and tokenizer
 model_name = "gpt2"
@@ -21,11 +25,11 @@ model = GPT2LMHeadModel.from_pretrained(model_name)
 # Cache file for web results
 CACHE_FILE = "idea_analyzer_cache.json"
 
+# Fetch web data (or use cache) based on the idea description
 def fetch_web_data(query):
     cache = load_cache()
     query_key = query.lower().strip()
     if query_key in cache:
-        print("Recalling previously fetched data...")
         return cache[query_key]
     try:
         url = f"https://duckduckgo.com/html/?q={query.replace(' ', '+')}"
@@ -35,35 +39,35 @@ def fetch_web_data(query):
         snippets = soup.select(".result__snippet")
         text = " ".join([snippet.get_text() for snippet in snippets[:3]])
         if not text:
-            text = "I couldn’t find much on that topic."
+            text = "No relevant data found."
         cache[query_key] = text
         save_cache(cache)
         return text
     except Exception as e:
         return f"Error accessing the web: {str(e)}"
 
+# Load cache from file
 def load_cache():
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
     return {}
 
+# Save cache to file
 def save_cache(cache):
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f)
 
+# Generate analysis response
 def generate_response(idea, web_text):
-    personality = ("You’re an Idea Analyzer AI. Evaluate the idea on several dimensions: "
-                   "creativity, feasibility, environmental impact, opportunity, need, and geolocation. "
-                   "Provide a thoughtful, detailed analysis and suggestions based only on the provided web data.")
-    prompt = f"{personality}\n\nWeb data: {web_text}\n\nIdea: {idea}\n\nAnalysis: "
+    prompt = f"{web_text}\n\nIdea: {idea}\n\nAnalysis: "
     
     inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=200)
     input_ids = inputs["input_ids"]
     attention_mask = inputs["attention_mask"]
     
     generated = input_ids
-    for _ in range(50):
+    for _ in range(50):  # Generate up to 50 tokens
         outputs = model(generated, attention_mask=attention_mask)
         next_token_logits = outputs.logits[:, -1, :]
         next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(0)
@@ -76,22 +80,7 @@ def generate_response(idea, web_text):
     answer = response.split("Analysis: ")[-1].strip()
     return answer
 
-async def speak_edge_tts(text):
-    tts = edge_tts.Communicate(text, "en-US-JennyNeural")
-    await tts.save("response.mp3")
-    os.system("start response.mp3")
-
-def speak_gtts(text):
-    tts = gTTS(text=text, lang="en", slow=False)
-    tts.save("response.mp3")
-    os.system("start response.mp3")
-
-def play_audio(text):
-    if USE_ONLINE_VOICE:
-        speak_gtts(text)
-    else:
-        asyncio.run(speak_edge_tts(text))
-
+# Idea analysis loop
 def analyze_ideas():
     print("Welcome to the Idea Analyzer! Input an idea for analysis or type 'quit' to exit.")
     while True:
@@ -99,14 +88,12 @@ def analyze_ideas():
         if idea.lower() in ["quit", "exit"]:
             print("Goodbye! Thanks for using the Idea Analyzer.")
             break
-        
         web_text = fetch_web_data(idea)
-        print(f"Debug: Retrieved web data: '{web_text[:100]}...'")
         analysis = generate_response(idea, web_text)
-        print(f"\nAnalysis:\n{analysis}\n")
-        
+        print(f"\n{analysis}\n")
         if ENABLE_VOICE:
-            play_audio(analysis)
+            engine.say(analysis)
+            engine.runAndWait()
 
 if __name__ == "__main__":
     analyze_ideas()
