@@ -6,14 +6,13 @@ import os
 import json
 
 # Voice feature config (set to True to enable voice, False to disable)
-ENABLE_VOICE = True  # Change to True if you want the analyzer to speak
+ENABLE_VOICE = True  # Change to True if you want Alphonse to speak
 if ENABLE_VOICE:
     try:
         import pyttsx3
         engine = pyttsx3.init()
-        engine.setProperty('voice', 'english_rp+m3')  # Set to a male voice
     except ImportError:
-        print("I’d speak if I could, but pyttsx3 isn’t installed. Try 'pip install pyttsx3'.")
+        print("Alphonse: I’d speak if I could, but pyttsx3 isn’t installed. Try 'pip install pyttsx3'.")
         ENABLE_VOICE = False
 
 # Load GPT-2 model and tokenizer
@@ -22,14 +21,15 @@ tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 model = GPT2LMHeadModel.from_pretrained(model_name)
 
-# Cache file for web results
-CACHE_FILE = "idea_analyzer_cache.json"
+# Cache file
+CACHE_FILE = "alphonse_cache.json"
 
-# Fetch web data (or use cache) based on the idea description
+# Fetch web data (or use cache)
 def fetch_web_data(query):
     cache = load_cache()
     query_key = query.lower().strip()
     if query_key in cache:
+        print("Alphonse: Let me recall that for you...")
         return cache[query_key]
     try:
         url = f"https://duckduckgo.com/html/?q={query.replace(' ', '+')}"
@@ -39,35 +39,36 @@ def fetch_web_data(query):
         snippets = soup.select(".result__snippet")
         text = " ".join([snippet.get_text() for snippet in snippets[:3]])
         if not text:
-            text = "No relevant data found."
+            text = "I couldn’t find much on that, I’m afraid."
         cache[query_key] = text
         save_cache(cache)
         return text
     except Exception as e:
-        return f"Error accessing the web: {str(e)}"
+        return f"Alphonse: Seems the web’s playing hard to get. Error: {str(e)}"
 
-# Load cache from file
+# Load cache
 def load_cache():
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
     return {}
 
-# Save cache to file
+# Save cache
 def save_cache(cache):
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f)
 
-# Generate analysis response
-def generate_response(idea, web_text):
-    prompt = f"{web_text}\n\nIdea: {idea}\n\nAnalysis: "
+# Generate response with complete sentences
+def generate_response(question, web_text):
+    personality = "You’re Alphonse, a calm and thoughtful AI who answers based ONLY on the web data provided, in a moderate and gentle tone."
+    prompt = f"{personality}\nWeb data: {web_text}\nQuestion: {question}\nAnswer: "
     
     inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=200)
     input_ids = inputs["input_ids"]
     attention_mask = inputs["attention_mask"]
     
     generated = input_ids
-    for _ in range(50):  # Generate up to 50 tokens
+    for _ in range(50):  # Max 50 tokens
         outputs = model(generated, attention_mask=attention_mask)
         next_token_logits = outputs.logits[:, -1, :]
         next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(0)
@@ -77,23 +78,24 @@ def generate_response(idea, web_text):
         if decoded_token in ['.', '!', '?']:
             break
     response = tokenizer.decode(generated[0], skip_special_tokens=True)
-    answer = response.split("Analysis: ")[-1].strip()
+    answer = response.split("Answer: ")[-1].strip()
     return answer
 
-# Idea analysis loop
-def analyze_ideas():
-    print("Welcome to the Idea Analyzer! Input an idea for analysis or type 'quit' to exit.")
+# Chat loop
+def chat_with_alphonse():
+    print("Alphonse: Hello there, I’m here to help you out. What’s on your mind?")
     while True:
-        idea = input("Enter your idea: ")
-        if idea.lower() in ["quit", "exit"]:
-            print("Goodbye! Thanks for using the Idea Analyzer.")
+        question = input("You: ")
+        if question.lower() in ["quit", "exit"]:
+            print("Alphonse: Take care, friend. Until next time.")
             break
-        web_text = fetch_web_data(idea)
-        analysis = generate_response(idea, web_text)
-        print(f"\n{analysis}\n")
+        web_text = fetch_web_data(question)
+        print(f"Debug: Web data = '{web_text[:100]}...'")
+        answer = generate_response(question, web_text)
+        print(f"Alphonse: {answer}")
         if ENABLE_VOICE:
-            engine.say(analysis)
+            engine.say(answer)
             engine.runAndWait()
 
 if __name__ == "__main__":
-    analyze_ideas()
+    chat_with_alphonse()
