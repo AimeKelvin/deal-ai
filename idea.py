@@ -1,3 +1,5 @@
+
+
 # Block 1: Basic Setup and Input
 print("Welcome to the Idea Analyzer AI (with Research)!")
 print("Enter your idea (e.g., 'A solar-powered phone charger in rural areas'): ")
