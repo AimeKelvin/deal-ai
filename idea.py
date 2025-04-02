@@ -4,15 +4,17 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import torch
 import os
 import json
+import edge_tts
+import asyncio
 
 # Voice feature config (set to True to enable voice, False to disable)
 ENABLE_VOICE = True  # Change to True if you want Alphonse to speak
 if ENABLE_VOICE:
     try:
-        import pyttsx3
-        engine = pyttsx3.init()
+        # No additional downloads needed; Edge TTS uses online voices
+        pass
     except ImportError:
-        print("Alphonse: I’d speak if I could, but pyttsx3 isn’t installed. Try 'pip install pyttsx3'.")
+        print("Alphonse: I’d speak if I could, but edge-tts isn’t installed. Try 'pip install edge-tts'.")
         ENABLE_VOICE = False
 
 # Load GPT-2 model and tokenizer
@@ -81,6 +83,13 @@ def generate_response(question, web_text):
     answer = response.split("Answer: ")[-1].strip()
     return answer
 
+# Async function to handle Edge TTS audio generation
+async def speak_with_edge_tts(text):
+    voice = "en-US-GuyNeural"  # Natural male voice
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save("output.mp3")
+    os.system("start output.mp3" if os.name == "nt" else "aplay output.mp3" if os.name == "posix" else "afplay output.mp3")
+
 # Chat loop
 def chat_with_alphonse():
     print("Alphonse: Hello there, I’m here to help you out. What’s on your mind?")
@@ -94,8 +103,8 @@ def chat_with_alphonse():
         answer = generate_response(question, web_text)
         print(f"Alphonse: {answer}")
         if ENABLE_VOICE:
-            engine.say(answer)
-            engine.runAndWait()
+            # Run the async Edge TTS function
+            asyncio.run(speak_with_edge_tts(answer))
 
 if __name__ == "__main__":
     chat_with_alphonse()
